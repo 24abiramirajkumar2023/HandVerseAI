@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>HandVerseAI — Temple Run 3D Jungle Adventure</title>
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Three.js ES Module Import Map -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <!-- MediaPipe Hands CDN dependencies -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <!-- WebGL 3D Canvas -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Damage Screen Flash Effect -->
+  <div id="damage-vignette"></div>
+
+  <!-- Asset Loading Overlay -->
+  <div id="loader-overlay">
+    <div class="loader-spinner"></div>
+    <div class="loader-text" id="loader-status">Initializing Jungle Temple...</div>
+    <div class="progress-track">
+      <div class="progress-fill" id="loader-progress"></div>
+    </div>
+  </div>
+
+  <!-- Milestone Notification Banner -->
+  <div id="milestone-banner">TEMPLE MILESTONE: 250M DEEP!</div>
+
+  <!-- UI & In-Game HUD -->
+  <div id="ui-root">
+    <!-- Top HUD Navigation Bar -->
+    <header id="hud-top">
+      <div class="hud-group">
+        <div class="hud-card">
+          <span class="icon">🏃</span>
+          <div>
+            <div class="label">Distance</div>
+            <div class="value" id="hud-distance">0 m</div>
+          </div>
+        </div>
+
+        <div class="hud-card" id="hud-coins">
+          <span class="icon">🪙</span>
+          <div>
+            <div class="label">Coins</div>
+            <div class="value" id="hud-coins-val">0</div>
+          </div>
+        </div>
+
+        <div class="hud-card">
+          <span class="icon">💎</span>
+          <div>
+            <div class="label">Crystals</div>
+            <div class="value" id="hud-crystals">0</div>
+          </div>
+        </div>
+
+        <div class="hud-card">
+          <span class="icon">🏆</span>
+          <div>
+            <div class="label">Score</div>
+            <div class="value" id="hud-score">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hud-group">
+        <!-- Health Indicator -->
+        <div class="hud-card">
+          <div class="label" style="margin-right: 4px;">Health</div>
+          <div id="hud-health">
+            <span class="heart" id="heart-1">❤️</span>
+            <span class="heart" id="heart-2">❤️</span>
+            <span class="heart" id="heart-3">❤️</span>
+          </div>
+        </div>
+
+        <!-- Quick Toggles -->
+        <button id="btn-sound" class="btn-icon active" title="Toggle Sound (M)">🔊</button>
+        <button id="btn-camera" class="btn-icon" title="Toggle Webcam Hand Control (C)">📷</button>
+        <button id="btn-pause" class="btn-icon" title="Pause Game (Esc/P)">⏸️</button>
+        <button id="btn-fullscreen" class="btn-icon" title="Toggle Fullscreen (F)">⛶</button>
+      </div>
+    </header>
+
+    <!-- Central Real-Time Action Feedback Indicator -->
+    <div id="gesture-hud-prompt">
+      <div class="prompt-main-row">
+        <span id="gesture-hud-icon">⚡</span>
+        <span id="gesture-hud-text">JUMP</span>
+      </div>
+      <div id="gesture-hud-sub">ACTION TRIGGERED</div>
+    </div>
+
+    <div></div> <!-- Spacer -->
+  </div>
+
+  <!-- Live Hand Tracking Webcam HUD (Live Video, Landmarks & Real-Time Debug Panel) -->
+  <div id="hand-tracker-container">
+    <div class="tracker-header">
+      <span class="tracker-title">
+        <span class="tracker-status-dot" id="tracker-dot"></span>
+        Hand Vision
+      </span>
+      <span id="tracker-state-text" style="font-size:0.65rem; color:#d8b4fe;">STANDBY</span>
+    </div>
+    <div class="preview-wrapper">
+      <video id="webcam-video" playsinline autoplay muted width="320" height="240"></video>
+      <canvas id="hand-canvas" width="220" height="160"></canvas>
+      <div class="gesture-badge" id="gesture-badge">Keyboard Mode Active</div>
+    </div>
+    <!-- Real-Time Vision Debug Panel -->
+    <div id="tracker-debug-panel">
+      <div class="debug-row">
+        <span class="debug-label">Landmarks:</span>
+        <span class="debug-val" id="dbg-tracking">Not Detected</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Position:</span>
+        <span class="debug-val" id="dbg-pos">X: -- | Y: --</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Pinch (Jump):</span>
+        <span class="debug-val" id="dbg-pinch">--</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Current Gesture:</span>
+        <span class="debug-val highlight" id="dbg-gesture">None</span>
+      </div>
+      <div class="debug-row">
+        <span class="debug-label">Last Action:</span>
+        <span class="debug-val action" id="dbg-last-action">None</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Start Menu Overlay -->
+  <div id="start-screen" class="overlay-screen">
+    <div class="menu-card">
+      <h1 class="game-logo">HANDVERSE AI</h1>
+      <p class="subtitle">Temple Run 3D Jungle Adventure — Full Hand Gesture Control</p>
+
+      <div class="tutorial-grid">
+        <div class="tutorial-card">
+          <h3>✋ Real Hand Gestures</h3>
+          <ul>
+            <li><strong>Move Hand Left / Right:</strong> Switch lanes (return to center to rearm)</li>
+            <li><strong>Pinch (Thumb + Index):</strong> Leap &amp; Jump over logs (release to rearm)</li>
+            <li><strong>Fist or Move Down:</strong> Slide / Duck under stone arches</li>
+          </ul>
+        </div>
+        <div class="tutorial-card">
+          <h3>⌨️ Keyboard Backup</h3>
+          <ul>
+            <li><strong>A / D or ◄ / ►:</strong> Switch lanes</li>
+            <li><strong>W / Space / ▲:</strong> Leap / Jump</li>
+            <li><strong>S or ▼:</strong> Slide / Duck under branches</li>
+            <li><strong>P or Esc:</strong> Pause / Resume</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button id="btn-start" class="btn-primary">
+          <span>🌲 START GAME (WITH WEBCAM)</span>
+        </button>
+        <button id="btn-enable-camera" class="btn-secondary">
+          <span>📷 Test &amp; Preview Camera</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pause Menu Overlay -->
+  <div id="pause-screen" class="overlay-screen hidden">
+    <div class="menu-card">
+      <h2 class="game-logo" style="font-size: 2.2rem;">GAME PAUSED</h2>
+      <p class="subtitle">Catch your breath, Adventurer</p>
+      <div class="actions-row" style="margin-top: 24px;">
+        <button id="btn-resume" class="btn-primary">
+          <span>▶️ RESUME RUN</span>
+        </button>
+        <button id="btn-restart-pause" class="btn-secondary">
+          <span>🔄 RESTART RUN</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game Over Menu Overlay -->
+  <div id="gameover-screen" class="overlay-screen hidden">
+    <div class="menu-card">
+      <h2 class="game-logo" style="font-size: 2.2rem; background: linear-gradient(135deg, #f43f5e, #fbbf24); -webkit-background-clip: text; background-clip: text;">TEMPLE EXPEDITION OVER</h2>
+      <p class="subtitle" id="gameover-cause">You tripped among the ancient temple ruins!</p>
+
+      <div class="results-grid">
+        <div class="result-stat">
+          <div class="label">Distance</div>
+          <div class="num" id="res-distance">0 m</div>
+        </div>
+        <div class="result-stat">
+          <div class="label">Coins</div>
+          <div class="num" id="res-coins">0</div>
+        </div>
+        <div class="result-stat">
+          <div class="label">Crystals</div>
+          <div class="num" id="res-crystals">0</div>
+        </div>
+        <div class="result-stat">
+          <div class="label">Total Score</div>
+          <div class="num" id="res-score">0</div>
+        </div>
+      </div>
+
+      <div style="font-size:0.95rem; color:#e9d5ff; font-weight:700; margin-bottom: 24px;" id="high-score-text">
+        🏆 Record High Score: 0 pts
+      </div>
+
+      <div class="actions-row-duo">
+        <button id="btn-restart" class="btn-primary">
+          <span>🔄 RETRY</span>
+        </button>
+        <button id="btn-home" class="btn-secondary">
+          <span>🏠 HOME</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Game Engine Script -->
+  <script type="module" src="script.js"></script>
+</body>
+</html>
